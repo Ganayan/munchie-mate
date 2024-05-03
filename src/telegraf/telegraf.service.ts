@@ -117,18 +117,25 @@ export class TelegrafService {
         payload,
         { headers },
       );
-      console.log(
-        JSON.stringify(openAIResponse.data.choices[0].message.content, null, 2),
-      );
-      const responseContent = JSON.parse(
-        openAIResponse.data.choices[0].message.content,
-      );
 
-      const description = responseContent.description;
-      const calories = responseContent.calories;
-      return { description, calories };
+      // Remove backticks and other non-JSON characters
+      const responseText = openAIResponse.data.choices[0].message.content
+        .replace(/`/g, '')
+        .trim();
+
+      try {
+        const responseContent = JSON.parse(responseText);
+        const description = responseContent.description;
+        const calories = responseContent.calories;
+        return { description, calories };
+      } catch (error) {
+        this.logger.error(
+          `Failed to parse JSON. Error: ${error.message}. Raw content: ${responseText}`,
+        );
+        return null;
+      }
     } catch (error) {
-      this.logger.error('Failed to analyze image.');
+      this.logger.error(`Failed to analyze image. Error: ${error.message}`);
       return null;
     }
   }
