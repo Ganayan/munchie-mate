@@ -8,12 +8,25 @@ dotenv.config();
 export class TelegrafService {
   private readonly logger = new Logger(TelegrafService.name);
   private bot: Telegraf;
+  private dailyCalorieLimit: { [userId: number]: number } = {};
+  private caloriesConsumed: { [userId: number]: number } = {};
 
   constructor() {
     this.bot = new Telegraf(process.env.TELEGRAM_BOT_TOKEN);
     this.bot.start((ctx) =>
       ctx.reply('Welcome! 🎉 I am your Calorie Tracker Bot.'),
     );
+
+    this.bot.command('dailyCalories', (ctx) => {
+      const args = ctx.message.text.split(' ').slice(1); // Get arguments after the command
+      if (args.length > 0 && !isNaN(parseInt(args[0]))) {
+        this.dailyCalorieLimit[ctx.from.id] = parseInt(args[0]);
+        this.caloriesConsumed[ctx.from.id] = 0; // Reset calories consumed when setting a new limit
+        ctx.reply(`Daily calorie limit set to ${args[0]} kcal.`);
+      } else {
+        ctx.reply('Please provide a valid number for the calorie limit.');
+      }
+    });
 
     this.bot.on('photo', async (ctx) => {
       const photo = ctx.message.photo.pop(); // Get the highest resolution photo
@@ -22,8 +35,16 @@ export class TelegrafService {
         ctx.reply('Analyzing your photo... 🧐');
         const analysisResult = await this.analyzePhoto(fileId);
         if (analysisResult) {
+          const userId = ctx.from.id;
+          const calories = analysisResult.calories;
+          if (this.caloriesConsumed[userId] === undefined) {
+            this.caloriesConsumed[userId] = 0;
+          }
+          this.caloriesConsumed[userId] += calories;
+          const caloriesLeft =
+            this.dailyCalorieLimit[userId] - this.caloriesConsumed[userId];
           ctx.reply(
-            `Hey, it looks like you had ${analysisResult.description} which I note down with ${analysisResult.calories} calories! 🍽️`,
+            `Hey, it looks like you had ${analysisResult.description} which I note down with ${calories} calories! 🍽️ You have ${caloriesLeft} kcal left for today.`,
           );
         } else {
           ctx.reply('Could not estimate calories from the image. 😕');
@@ -36,7 +57,7 @@ export class TelegrafService {
 
   async analyzePhoto(fileId: string) {
     const photoUrl = await this.bot.telegram.getFileLink(fileId);
-    return await this.sendImageToOpenAI(photoUrl.toString()); // Convert URL object to string
+    return await this.sendImageToOpenAI(photoUrl.toString());
   }
 
   async sendImageToOpenAI(photoUrl: string) {
@@ -45,14 +66,7 @@ export class TelegrafService {
         Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
         'Content-Type': 'application/json',
       };
-      const prompt = `Analyze the meal in the image and respond with a JSON object containing two keys: 
-      "calories" for the estimated total calorie count as an integer, 
-      and "description" for a brief (10 words or less) description of the meal. Base your estimation on the fact that I live in Germany and take that into account when estimating package sizing.
-      Respond in the following format:
-      {
-        "calories": 0,
-        "description": ""
-      }`;
+      const prompt = `Analyze the meal in the image and respond with a JSON object containing two keys: "calories" for the estimated total calorie count as an integer, and "description" for a brief (10 words or less) description of the meal. Base your estimation on the fact that I live in Germany and take that into account when estimating package sizing. Respond in the following format: { "calories": 0, "description": "" }`;
       const payload = {
         model: 'gpt-4-turbo',
         messages: [
@@ -65,9 +79,7 @@ export class TelegrafService {
               },
               {
                 type: 'image_url',
-                image_url: {
-                  url: photoUrl, // Make sure this is correctly formatted
-                },
+                image_url: { url: photoUrl },
               },
             ],
           },
@@ -81,11 +93,12 @@ export class TelegrafService {
         { headers },
       );
       console.log(
-        JSON.stringify(openAIResponse.data.choices[0].message, null, 2),
+        JSON.stringify(openAIResponse.data.choices[0].message.content, null, 2),
       );
       const responseContent = JSON.parse(
         openAIResponse.data.choices[0].message.content,
       );
+
       const description = responseContent.description;
       const calories = responseContent.calories;
       return { description, calories };
