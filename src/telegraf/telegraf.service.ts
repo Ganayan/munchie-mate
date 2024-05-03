@@ -19,7 +19,7 @@ export class TelegrafService {
       ),
     );
 
-    this.bot.command('dailyCalories', (ctx) => {
+    this.bot.command('setCalories', (ctx) => {
       const args = ctx.message.text.split(' ').slice(1); // Get arguments after the command
       if (args.length > 0 && !isNaN(parseInt(args[0]))) {
         this.dailyCalorieLimit[ctx.from.id] = parseInt(args[0]);
@@ -30,6 +30,21 @@ export class TelegrafService {
       } else {
         ctx.reply(
           'Oops! Please send me a valid number to set your calorie goal. 💪',
+        );
+      }
+    });
+
+    this.bot.command('getCalories', (ctx) => {
+      const userId = ctx.from.id;
+      const caloriesLeft =
+        this.dailyCalorieLimit[userId] - this.caloriesConsumed[userId];
+      if (this.dailyCalorieLimit[userId]) {
+        ctx.reply(
+          `You've consumed ${this.caloriesConsumed[userId]} kcal today and have ${caloriesLeft} kcal left to enjoy! 🎉`,
+        );
+      } else {
+        ctx.reply(
+          'You haven’t set your daily calorie goal yet! Use /setCalories to set it. 💪',
         );
       }
     });
