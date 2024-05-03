@@ -14,7 +14,9 @@ export class TelegrafService {
   constructor() {
     this.bot = new Telegraf(process.env.TELEGRAM_BOT_TOKEN);
     this.bot.start((ctx) =>
-      ctx.reply('Welcome! 🎉 I am your Calorie Tracker Bot.'),
+      ctx.reply(
+        'Hello there! 🌟 I’m your friendly Calorie Tracker Bot! Ready to dive into your nutrition journey? 🚀',
+      ),
     );
 
     this.bot.command('dailyCalories', (ctx) => {
@@ -22,9 +24,13 @@ export class TelegrafService {
       if (args.length > 0 && !isNaN(parseInt(args[0]))) {
         this.dailyCalorieLimit[ctx.from.id] = parseInt(args[0]);
         this.caloriesConsumed[ctx.from.id] = 0; // Reset calories consumed when setting a new limit
-        ctx.reply(`Daily calorie limit set to ${args[0]} kcal.`);
+        ctx.reply(
+          `Yay! 🎉 Your daily calorie goal is now set at ${args[0]} kcal! Let's make today a healthy one! 🍏`,
+        );
       } else {
-        ctx.reply('Please provide a valid number for the calorie limit.');
+        ctx.reply(
+          'Oops! Please send me a valid number to set your calorie goal. 💪',
+        );
       }
     });
 
@@ -32,7 +38,9 @@ export class TelegrafService {
       const photo = ctx.message.photo.pop(); // Get the highest resolution photo
       if (photo) {
         const fileId = photo.file_id;
-        ctx.reply('Analyzing your photo... 🧐');
+        ctx.reply(
+          'Hold tight! 🕵️‍♂️ I’m analyzing your photo to count those calories...',
+        );
         const analysisResult = await this.analyzePhoto(fileId);
         if (analysisResult) {
           const userId = ctx.from.id;
@@ -44,10 +52,12 @@ export class TelegrafService {
           const caloriesLeft =
             this.dailyCalorieLimit[userId] - this.caloriesConsumed[userId];
           ctx.reply(
-            `Hey, it looks like you had ${analysisResult.description} which I note down with ${calories} calories! 🍽️ You have ${caloriesLeft} kcal left for today.`,
+            `Wow! You had ${analysisResult.description} adding up to ${calories} calories. 🍴 You've got ${caloriesLeft} kcal left to enjoy today! Keep going! 🔥`,
           );
         } else {
-          ctx.reply('Could not estimate calories from the image. 😕');
+          ctx.reply(
+            'Hmm, I couldn’t figure out the calories this time. 😢 Try another pic or check back later!',
+          );
         }
       }
     });
