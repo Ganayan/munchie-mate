@@ -1,15 +1,17 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { Telegraf } from 'telegraf';
 import axios from 'axios';
 import * as dotenv from 'dotenv';
+import { readFileSync, writeFileSync, existsSync } from 'fs';
 dotenv.config();
 
 @Injectable()
-export class TelegrafService {
+export class TelegrafService implements OnModuleInit {
   private readonly logger = new Logger(TelegrafService.name);
   private bot: Telegraf;
   private dailyCalorieLimit: { [userId: number]: number } = {};
   private caloriesConsumed: { [userId: number]: number } = {};
+  private dataFilePath = 'user_data.json';
 
   constructor() {
     this.bot = new Telegraf(process.env.TELEGRAM_BOT_TOKEN);
@@ -20,10 +22,11 @@ export class TelegrafService {
     );
 
     this.bot.command('setCalories', (ctx) => {
-      const args = ctx.message.text.split(' ').slice(1); // Get arguments after the command
+      const args = ctx.message.text.split(' ').slice(1);
       if (args.length > 0 && !isNaN(parseInt(args[0]))) {
         this.dailyCalorieLimit[ctx.from.id] = parseInt(args[0]);
-        this.caloriesConsumed[ctx.from.id] = 0; // Reset calories consumed when setting a new limit
+        this.caloriesConsumed[ctx.from.id] = 0;
+        this.saveData();
         ctx.reply(
           `Yay! 🎉 Your daily calorie goal is now set at ${args[0]} kcal! Let's make today a healthy one! 🍏`,
         );
@@ -50,7 +53,7 @@ export class TelegrafService {
     });
 
     this.bot.on('photo', async (ctx) => {
-      const photo = ctx.message.photo.pop(); // Get the highest resolution photo
+      const photo = ctx.message.photo.pop();
       if (photo) {
         const fileId = photo.file_id;
         ctx.reply(
@@ -60,14 +63,13 @@ export class TelegrafService {
         if (analysisResult) {
           const userId = ctx.from.id;
           const calories = analysisResult.calories;
-          if (this.caloriesConsumed[userId] === undefined) {
-            this.caloriesConsumed[userId] = 0;
-          }
-          this.caloriesConsumed[userId] += calories;
+          this.caloriesConsumed[userId] =
+            (this.caloriesConsumed[userId] || 0) + calories;
+          this.saveData();
           const caloriesLeft =
             this.dailyCalorieLimit[userId] - this.caloriesConsumed[userId];
           ctx.reply(
-            `Wow! You had ${analysisResult.description} adding up to ${calories} calories. 🍴 You've got ${caloriesLeft} kcal left to enjoy today! Keep going! 🔥`,
+            `Wow! You had ${analysisResult.description} adding up to ${calories} calories. 🍴 You've got ${caloriesLeft} kcal left to enjoy today! Keep going! 💪`,
           );
         } else {
           ctx.reply(
@@ -78,6 +80,31 @@ export class TelegrafService {
     });
 
     this.bot.launch();
+  }
+
+  onModuleInit() {
+    this.loadData();
+  }
+
+  loadData() {
+    if (existsSync(this.dataFilePath)) {
+      const data = readFileSync(this.dataFilePath, 'utf8');
+      const jsonData = JSON.parse(data);
+      this.dailyCalorieLimit = jsonData.dailyCalorieLimit || {};
+      this.caloriesConsumed = jsonData.caloriesConsumed || {};
+    }
+  }
+
+  saveData() {
+    const data = JSON.stringify(
+      {
+        dailyCalorieLimit: this.dailyCalorieLimit,
+        caloriesConsumed: this.caloriesConsumed,
+      },
+      null,
+      2,
+    );
+    writeFileSync(this.dataFilePath, data, 'utf8');
   }
 
   async analyzePhoto(fileId: string) {
@@ -91,7 +118,7 @@ export class TelegrafService {
         Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
         'Content-Type': 'application/json',
       };
-      const prompt = `Analyze the meal in the image and respond with a JSON object containing two keys: "calories" for the estimated total calorie count as an integer, and "description" for a brief (10 words or less) description of the meal. Base your estimation on the fact that I live in Germany and take that into account when estimating package sizing. Respond in the following format: { "calories": 0, "description": "" }`;
+      const prompt = `Analyze the meal in the image and respond with a JSON object containing two keys: "calories" for the estimated total calorie count as an integer, and "description" for a brief (10 words or less) description of the meal. Respond in the following format: { "calories": 0, "description": "" }`;
       const payload = {
         model: 'gpt-4-turbo',
         messages: [
@@ -117,23 +144,13 @@ export class TelegrafService {
         payload,
         { headers },
       );
-
-      // Remove backticks and other non-JSON characters
-      const responseText = openAIResponse.data.choices[0].message.content
-        .replace(/`/g, '')
-        .trim();
-
-      try {
-        const responseContent = JSON.parse(responseText);
-        const description = responseContent.description;
-        const calories = responseContent.calories;
-        return { description, calories };
-      } catch (error) {
-        this.logger.error(
-          `Failed to parse JSON. Error: ${error.message}. Raw content: ${responseText}`,
-        );
-        return null;
-      }
+      const responseText =
+        openAIResponse.data.choices[0].message.content.trim();
+      const responseContent = JSON.parse(responseText);
+      return {
+        description: responseContent.description,
+        calories: responseContent.calories,
+      };
     } catch (error) {
       this.logger.error(`Failed to analyze image. Error: ${error.message}`);
       return null;
