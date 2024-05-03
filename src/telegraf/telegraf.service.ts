@@ -46,8 +46,8 @@ export class TelegrafService {
         'Content-Type': 'application/json',
       };
       const prompt = `Analyze the meal in the image and respond with a JSON object containing two keys: 
-      "calories" for the estimated calorie count as an integer, 
-      and "description" for a brief (5 words or less) description of the meal. 
+      "calories" for the estimated total calorie count as an integer, 
+      and "description" for a brief (10 words or less) description of the meal. Base your estimation on the fact that I live in Germany and take that into account when estimating package sizing.
       Respond in the following format:
       {
         "calories": 0,
