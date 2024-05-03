@@ -47,7 +47,7 @@ export class TelegrafService {
       };
       const prompt = `Analyze the meal in the image and respond with a JSON object containing two keys: 
       "calories" for the estimated calorie count as an integer, 
-      and "description" for a brief description of the meal. 
+      and "description" for a brief (5 words or less) description of the meal. 
       Respond in the following format:
       {
         "calories": 0,
@@ -80,7 +80,9 @@ export class TelegrafService {
         payload,
         { headers },
       );
-
+      console.log(
+        JSON.stringify(openAIResponse.data.choices[0].message, null, 2),
+      );
       const responseContent = JSON.parse(
         openAIResponse.data.choices[0].message.content,
       );
