@@ -118,7 +118,7 @@ export class TelegrafService implements OnModuleInit {
         Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
         'Content-Type': 'application/json',
       };
-      const prompt = `Analyze the meal in the image and respond with a JSON object containing two keys: "calories" for the estimated total calorie count as an integer, and "description" for a brief (10 words or less) description of the meal. Respond in the following format: { "calories": 0, "description": "" }`;
+      const prompt = `Analyze the meal in the image and respond with a JSON object containing two keys: "calories" for the estimated total calorie count as an integer, and "description" for a brief (10 words or less) description of the meal. Respond in the following format: { "calories": 0, "description": "" } but do not use a code block, only respond with the json object in plain text, no additional whitespace!`;
       const payload = {
         model: 'gpt-4-turbo',
         messages: [
